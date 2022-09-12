@@ -52,7 +52,7 @@
 --\func \infixl 6 - (x y : Nat) : Nat
 --  | 0, _ => 0
 --  | suc x, 0 => suc x
---  | suc x, suc y => x - y
+  | suc x, suc y => x - y
 
 -- 4. Определите функцию if, аналогичную следующей функции:
 {- Haskell:
