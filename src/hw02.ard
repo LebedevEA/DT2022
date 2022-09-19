@@ -1,27 +1,48 @@
 \import Utils
+\import hw01 (fac)
 
 -- 1. Определите полиморфный tail для списков.
 
+\func tail {A : \Type} (xs : List A) : Maybe A \elim xs
+  | nil => nothing
+  | :: a xs => just a
+
 -- 2. Реализуйте любой (but choose wisely) алгоритм сортировки. Функцию сравнения можно принимать в качестве аргумента.
+
+\func sort (A : \Type) (less : A -> A -> Bool) (list : List A) : List A \elim list
+  | nil => nil
+  | :: a list => put less a (sort A less list)
+  \where
+    \func put {A : \Type} (less : A -> A -> Bool) (a : A) (list : List A) : List A \elim list
+      | nil => a :: nil
+      | :: b list => if (less a b) (a :: b :: list) (b :: put less a list)
 
 -- 3. Докажите ассоциативность && и ||.
 
-\func &&-assoc (x y z : Bool) : (x && y) && z = x && (y && z) => {?}
+\func &&-assoc (x y z : Bool) : (x && y) && z = x && (y && z) \elim x
+  | true => idp
+  | false => idp
 
-\func ||-assoc (x y z : Bool) : (x || y) || z = x || (y || z) => {?}
+\func ||-assoc (x y z : Bool) : (x || y) || z = x || (y || z) \elim x
+  | true => idp
+  | false => idp
 
 -- 4. Докажите, что fac 3 равно 6.
+
+\func fact3is6 : fac 3 = 6 => idp
 
 -- 5. Докажите следующие пропозициональные тавтологии (choose 2 out of 3).
 
 -- t1 : (P and Q -> R) -> P -> Q -> R
-\func t1 {P Q R : \Type} (f : \Sigma P Q -> R) (p : P) (q : Q) : R => {?}
+\func t1 {P Q R : \Type} (f : \Sigma P Q -> R) (p : P) (q : Q) : R => f (p, q)
 
 -- t2 : (P -> R) -> (Q -> R) -> P or Q -> R
-\func t2 {P Q R : \Type} (f : P -> R) (g : Q -> R) (h : Either P Q) : R => {?}
+\func t2 {P Q R : \Type} (f : P -> R) (g : Q -> R) (h : Either P Q) : R \elim h
+  | inl a => f a
+  | inr b => g b
 
 -- t3 : ((P -> Q -> R) -> P) -> (P -> R) -> R
-\func t3 {P Q R : \Type} (f : (P -> Q -> R) -> P) (g : P -> R) : R => {?}
+\func t3 {P Q R : \Type} (f : (P -> Q -> R) -> P) (g : P -> R) : R => g (f (\lam p _ => g p))
 
 -- 6. Сформулируйте и докажите следующие пропозициональные тавтологии (choose 2 out of 3).
 
@@ -29,13 +50,21 @@
 -- t5 : (P or Q -> P and Q) -> (P -> Q) and (Q -> P)
 -- t6 : ((((P -> Q) -> P) -> P) -> Q) -> Q
 
+\func t4 {P Q R : \Type} (f : P -> Q -> R) (PQ : \Sigma P Q) : R \elim PQ
+  | (p,q) => f p q
+
+\func t5 {P Q R : \Type} (f : Either P Q -> \Sigma P Q) : \Sigma (P -> Q) (Q -> P) => (\lam p => (f (inl p)).2, \lam q => (f (inr q)).1)
+
+\func t6 {P Q R : \Type} (f : (((P -> Q) -> P) -> P) -> Q) : Q =>
+  f (\lam pqp => pqp (\lam p => f (\lam pq => p)))
+
 -- 7. Докажите следующие утверждения.
 
 -- s1 : Если для любого x : Nat верно P(x), то существует x : Nat для которого P(x) верно.
-\func s1 (P : Nat -> \Type) (h : \Pi (x : Nat) -> P x) : \Sigma (x : Nat) (P x) => {?}
+\func s1 (P : Nat -> \Type) (h : \Pi (x : Nat) -> P x) : \Sigma (x : Nat) (P x) => (42, h 42)
 
 -- s2 : Если не существует x : Nat такого, что верно P(x), то P(3) не верно.
-\func s2 (P : Nat -> \Type) (h : \Sigma (x : Nat) (P x) -> Empty) : P 3 -> Empty => {?}
+\func s2 (P : Nat -> \Type) (h : \Sigma (x : Nat) (P x) -> Empty) : P 3 -> Empty => \lam p3 => h (3, p3)
 
 -- 8. Сформулируйте и докажите следующие утверждения.
 
