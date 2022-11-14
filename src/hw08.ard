@@ -1,8 +1,16 @@
+\import Arith.Nat
 \import Data.Bool
 \import Data.List \hiding (headDef)
-\import Utils (<->)
-\import lect08
+\import Data.Maybe
+\import Data.Or
+\import Function.Meta
+\import Logic.Meta
+\import Meta
 \import Order.LinearOrder
+\import Paths
+\import Paths.Meta
+\import Utils (<->, sym)
+\import lect08
 \open LinearOrder
 
 -- 1. Реализуйте функцию filter и докажите ее корректность, то есть, что выполнены следующие условия:
@@ -10,12 +18,151 @@
 --    * Все элементы filter p xs удовлетворяют предикату p
 --    * Любой подсписок xs с тем же свойством является подсписком filter p xs
 
+\func filter {A : \Type} (p : A -> Bool) (xs : List A) : List A \elim xs
+  | nil => nil
+  | :: x xs => \case p x \with {
+    | true => x :: filter p xs
+    | false => filter p xs
+  }
+
+\data Sublist {A : \Type} (xs ys : List A) \elim xs, ys
+  | :: x xs, :: y ys => S-head (x = y) (Sublist xs ys)
+  | xs, :: y ys => S-tail (Sublist xs ys)
+  | nil, ys => S-nil
+
+\func fitered-list-is-sublist {A : \Type} (p : A -> Bool) (xs : List A) : Sublist (filter p xs) xs \elim xs
+  | nil => S-nil
+  | :: a xs => mcases \with {
+    | true => S-head idp (fitered-list-is-sublist p xs)
+    | false => S-tail (fitered-list-is-sublist p xs)
+  }
+
+\data Satisfies {A : \Type} (p : A -> Bool) (xs : List A) \elim xs
+  | nil => sat-nil
+  | :: x xs => sat-head (So (p x)) (Satisfies p xs)
+
+\func filtered-list-is-satidfies-pred {A : \Type} (p : A -> Bool) (xs : List A) : Satisfies p (filter p xs) \elim xs
+  | nil => sat-nil
+  | :: a xs => \case (p a) \as pa, idp : p a = pa \with {
+    | false, p1 => rewrite p1 $ filtered-list-is-satidfies-pred p xs
+    | true, p1 => rewrite p1 $ sat-head (rewrite p1 so) $ filtered-list-is-satidfies-pred p xs
+  }
+
+\func sublist-satisfies-sublist-filtered
+  {A : \Type}
+  (p : A -> Bool)
+  (ys xs : List A)
+  (sublist : Sublist ys xs)
+  (satisfies : Satisfies p ys)
+  : Sublist ys (filter p xs) \elim ys, xs
+  | nil, nil => S-nil
+  | nil, :: a xs => S-nil
+  | :: y ys, nil => \case sublist
+  | :: y ys, :: x xs => \case (p x) \as px, idp : p x = px \with {
+    | false, _x => rewrite _x $ \case sublist \with {
+      | S-head p1 s => \case satisfies \with {
+        | sat-head s1 s2 => So.absurd $ rewriteI _x $ rewriteI p1 s1
+      }
+      | S-tail s => sublist-satisfies-sublist-filtered p (y :: ys) xs s satisfies
+    }
+    | true, _x => rewrite _x $ \case sublist \with {
+      | S-head p1 s => S-head p1 $ sublist-satisfies-sublist-filtered p ys xs s $ \case satisfies \with {
+        | sat-head s1 s2 => s2
+      }
+      | S-tail s => S-tail $ sublist-satisfies-sublist-filtered p (y :: ys) xs s satisfies
+    }
+  }
+
 -- 2. Докажите, что Perm l1 l2 тогда и только тогда, когда Insertion.sort l1 = Insertion.sort l2.
+
+\func sort_eq_is_perm {A : Dec} (xs ys : List A) : Perm xs ys <-> (Insertion.sort xs = Insertion.sort ys) => (
+  \lam p => perm-impl-eq-sort p,
+  \lam p => perm-trans (Insertion.sort-perm xs) $ perm-sym $ rewrite p $ Insertion.sort-perm ys
+) \where {
+  \func perm-impl-eq-sort {A : Dec} {xs ys : List A} (perm : Perm xs ys) : Insertion.sort xs = Insertion.sort ys \elim xs, ys, perm
+    | nil, nil, perm-nil => idp
+    | :: x xs, :: y ys, perm-cons p perm => rewrite p $ rewrite (perm-impl-eq-sort perm) idp
+    | :: x (:: x' xs), :: y (:: y' ys), perm-swap p p1 p2 => rewrite p $ rewrite p1 $ rewrite p2 $ Insertion.sort-perm.insert-comm _ _ _
+    | xs, ys, perm-trans perm1 perm2 => rewrite (perm-impl-eq-sort perm1) $ rewrite (perm-impl-eq-sort perm2) idp
+
+  \func perm-sym {A : Dec} {xs ys : List A} (perm : Perm xs ys) : Perm ys xs \elim xs, ys, perm
+    | nil, nil, perm-nil => perm-nil
+    | :: x xs, :: y ys, perm-cons p perm => perm-cons (rewrite p idp) (perm-sym perm)
+    | :: x (:: x' xs), :: y (:: y' ys), perm-swap p p1 p2 => rewrite p $ rewrite p1 $ rewrite p2 $ perm-swap idp idp idp
+    | xs, ys, perm-trans perm1 perm2 => perm-trans (perm-sym perm2) (perm-sym perm1)
+}
 
 -- 3. Докажите, что спецификация "результат является перестановкой входа и отсортирован" является полной для функции sort.
 
-\func completeness {A : Dec} (sort : List A -> List A) (l : List A) (p : Perm l (sort l)) (s : Sorted (sort l)) : sort l = Insertion.sort l
-  => {?}
+\func completeness
+  {A : Dec}
+  (sort : List A -> List A)
+  (l : List A)
+  (p : Perm l (sort l))
+  (s : Sorted (sort l))
+  : sort l = Insertion.sort l => impl p s
+  \where {
+    \func impl
+      {A : Dec}
+      {xs ys : List A}
+      (p : Perm xs ys)
+      (s : Sorted ys)
+      : ys = Insertion.sort xs \elim xs, ys, p, s
+      | nil, nil, perm-nil, sorted-nil => idp
+      | :: x xs, :: y ys, perm-cons idp p1, sorted => rewriteI (simple-insert sorted)
+        $ pmap (Insertion.sort.insert x)
+            $ impl p1 \case sorted \with {
+        | sorted-cons _x s => s
+      }
+      | :: x (:: x' xs), :: y (:: y' ys), perm-swap idp idp idp, sorted-cons _x s =>
+        rewrite (Insertion.sort-perm.insert-comm x x' _)
+          $ rewriteI (simple-insert s)
+          $ rewriteI (simple-insert {A} {x'} {Insertion.sort.insert x xs} $ rewrite (simple-insert s) $ sorted-cons _x s)
+          $ pmap (Insertion.sort.insert x')
+          $ pmap (Insertion.sort.insert x)
+          $ sorted-is-sorted
+          $ \case s \with {
+            | sorted-cons _x1 s1 => s1
+          }
+      | nil, :: a ys, p, s => \case perm-nil-is-nil' p
+      | xs, ys, perm-trans {zs} p1 p2 \as p, s => \case impl p2 s \with {
+        | p3 => rewrite p3 $ sym $ (sort_eq_is_perm xs zs).1 p1
+      }
+
+    \func sorted-is-sorted {A : Dec} {xs : List A} (sorted : Sorted xs) : xs = Insertion.sort xs \elim xs
+      | nil => idp
+      | :: x xs => rewriteI (simple-insert sorted) $ pmap (Insertion.sort.insert x) $ \case sorted \with {
+        | sorted-cons _x s => sorted-is-sorted s
+      }
+
+    \func simple-insert {A : Dec} {x : A} {xs : List A} (sorted : Sorted (x :: xs)) : Insertion.sort.insert x xs = x :: xs \elim xs
+      | nil => idp
+      | :: a xs => mcases \with {
+        | inl x<a => \case sorted \with {
+          | sorted-cons _x s => rewriteI (simple-insert s) contradiction
+        }
+        | inr a<=x => idp
+      }
+
+    \func perm-nil-is-nil {A : Dec} {xs : List A} (perm : Perm xs nil) : xs = nil \elim xs, perm
+      | nil, perm-nil => idp
+      | xs, perm-trans {nil} perm1 perm2 => perm-nil-is-nil perm1
+      | nil, perm-trans {:: a l} perm1 perm2 => idp
+      | :: e xs, perm-trans {:: a l} perm1 perm2 => \case perm-nil-is-nil perm2
+    \func perm-nil-is-nil' {A : Dec} {xs : List A} (perm : Perm nil xs) : xs = nil \elim xs, perm
+      | nil, perm-nil => idp
+      | xs, perm-trans {nil} perm1 perm2 => perm-nil-is-nil' perm2
+      | nil, perm-trans {:: a l} perm1 perm2 => idp
+      | :: e xs, perm-trans {:: a l} perm1 perm2 => \case perm-nil-is-nil' perm1
+    \func perm-single-is-single {A : Dec} {a : A} {xs : List A} (perm : Perm (a :: nil) xs) : a :: nil = xs \elim xs, perm
+      | :: y xs, perm-cons p perm => rewrite (perm-nil-is-nil' perm) $ rewrite p idp
+      | xs, perm-trans {nil} perm1 perm2 => \case perm-nil-is-nil perm1
+      | xs, perm-trans {:: l nil} perm1 perm2 =>
+        rewrite (perm-single-is-single perm1) $ rewrite (perm-single-is-single perm2) idp
+      | xs, perm-trans {:: l (:: l' ls)} perm1 perm2 => \case perm-single-is-single perm1
+
+  }
+
 
 -- 4. Определите факториал через хвостовую рекурсию.
 --    Докажите, что он равен обычному определению факториала.
