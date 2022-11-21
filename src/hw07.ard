@@ -21,7 +21,7 @@
 \data ReflTransClosure {A : \Type} (R : A -> A -> \Type) (x y : A)
   | RTC-base (R x y)
   | RTC-refl (x = y)
-  | RTC-trans (z : A) (R x z) (R z y)
+  | RTC-trans (z : A) (ReflTransClosure R x z) (ReflTransClosure R z y)
 
 -- 4. Докажите, что если R уже рекфлексивно и транзитивно, то ReflTransClosure R эквивалентно R.
 
@@ -32,7 +32,7 @@
     \lam r => \case r \with {
       | RTC-base r => r
       | RTC-refl p => rewrite p $ refl y
-      | RTC-trans z r1 r2 => trans x z y r1 r2
+      | RTC-trans z r1 r2 => trans x z y (RTC-base r1) (RTC-base r2)
     }
   )
 
